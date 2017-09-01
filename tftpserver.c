@@ -4,7 +4,7 @@
 #include <sys/socket.h>
 
 
-#define TIMEOUT 1000
+#define TIMEOUT 600
 #define RETRYMAX 10
 #define PORT 6100
 
@@ -28,7 +28,7 @@ main(int argc, char **argv)
 		perror("Server: socket could not be created");
 		exit(0);
 	}
-
+	/*using bind, socket now becomes a server)*/
 	if (bind(sock, (struct sockaddr *) &server, sizeof(server)) < 0){
 		perror("bind");
 		exit(EXIT_FAILURE);
@@ -39,8 +39,22 @@ main(int argc, char **argv)
 		rec = recv(sock, buf, sizeof(buf),0);
 		
 		if(rec >0) {
-			switch(opCode(buf)){
+			switch(findOpcode(buf)){
+
+				/*RRQ*/
 				case '1':
+
+				/*WRQ*/
+				case '2':
+
+				/*DATA*/
+				case '3':
+
+				/*ACK*/
+				case '4':
+
+				/*ERROR*/
+				case '5':
 
 			}
 		}
@@ -48,4 +62,7 @@ main(int argc, char **argv)
 	}
 }
 
-char getOpcode(char )
+char findOpcode(char packet[]){
+	return packet[1];
+}
+
