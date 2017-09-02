@@ -43,7 +43,7 @@ int main(int argc, char **argv)
 		rec = recv(sock, recBuffer, sizeof(recBuffer),0);
 		
 		if(rec >0) {
-			switch(findOpcode(recBuffer)){
+			switch(getOpcode(recBuffer)){
 
 				/*RRQ*/
 				case '1':
@@ -74,7 +74,7 @@ int main(int argc, char **argv)
 	}
 }
 
-char findOpcode(char* packet){
+char getOpcode(char * packet){
 	return packet[1];
 }
 
