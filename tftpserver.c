@@ -11,20 +11,20 @@
 main(int argc, char **argv)
 {
 	char buffer[512];
+	int rec;
+	int sock;
 
 	/*Create a socket */
-	int sock;
 	sock = socket(AF_INET,SOCK_DGRAM, 0);
-	int rec;
-
+	
 	/*initialize socket structure*/
 	struct sockaddr_in server;
 	memset(&server, 0 , sizeof(server));
     server.sin_family = AF_INET; //AF_INET signifies Internet IP Protocol
-    server.sin_addr.s_addr = htonl(INADDR_ANY); /*accepts from anny address*/
+    server.sin_addr.s_addr = htonl(INADDR_ANY); /*accepts from any address*/
     server.sin_port = htons(PORT);
 
-	if (sd < 0){
+	if (sock < 0){
 		perror("Server: socket could not be created");
 		exit(0);
 	}
