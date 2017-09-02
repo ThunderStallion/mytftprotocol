@@ -10,13 +10,13 @@
 
 main(int argc, char **argv)
 {
-	char buffer[512];
+	char recBuffer[512];
 	int rec;
 	int sock;
 
 	/*Create a socket */
 	sock = socket(AF_INET,SOCK_DGRAM, 0);
-	
+
 	/*initialize socket structure*/
 	struct sockaddr_in server;
 	memset(&server, 0 , sizeof(server));
@@ -36,14 +36,19 @@ main(int argc, char **argv)
 
 
 	for(;;){
-		rec = recv(sock, buf, sizeof(buf),0);
+		rec = recv(sock, recBuffer, sizeof(recBuffer),0);
 		
 		if(rec >0) {
 			switch(findOpcode(buf)){
 
 				/*RRQ*/
 				case '1':
-
+					printf("Server: RRQ received\n");
+					String fileName = getFileName(recBuffer);
+					openFile = open(fileName, "r");
+					
+					fclose(openFile);
+					break;
 				/*WRQ*/
 				case '2':
 
@@ -64,5 +69,13 @@ main(int argc, char **argv)
 
 char findOpcode(char packet[]){
 	return packet[1];
+}
+
+char getFileName(char packet[]){
+ /*here we search for first byte of 0's*/
+ char * firstNull = strchr(packet, '\0');
+ char * fileName;
+ strncpy(fileName, packet+2, firstNull-message+2);
+ return fileName;
 }
 
