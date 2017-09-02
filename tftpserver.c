@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <netinet/in.h>
 #include <sys/socket.h>
 
 
@@ -8,7 +9,10 @@
 #define RETRYMAX 10
 #define PORT 6100
 
-main(int argc, char **argv)
+char findOpcode(char packet[]);
+char * getFileName(char packet[]);
+
+int main(int argc, char **argv)
 {
 	char recBuffer[512];
 	int rec;
@@ -39,43 +43,46 @@ main(int argc, char **argv)
 		rec = recv(sock, recBuffer, sizeof(recBuffer),0);
 		
 		if(rec >0) {
-			switch(findOpcode(buf)){
+			switch(findOpcode(recBuffer)){
 
 				/*RRQ*/
 				case '1':
 					printf("Server: RRQ received\n");
-					String fileName = getFileName(recBuffer);
-					openFile = open(fileName, "r");
+					char * fileName = getFileName(recBuffer);
+					FILE * openFile = fopen(fileName, "r");
 					
 					fclose(openFile);
 					break;
 				/*WRQ*/
 				case '2':
+					break;
 
 				/*DATA*/
 				case '3':
-
+					break;
 				/*ACK*/
 				case '4':
-
+					break;
 				/*ERROR*/
 				case '5':
-
+					break;
+				default:
+					break;
 			}
 		}
 
 	}
 }
 
-char findOpcode(char packet[]){
+char findOpcode(char* packet){
 	return packet[1];
 }
 
-char getFileName(char packet[]){
- /*here we search for first byte of 0's*/
- char * firstNull = strchr(packet, '\0');
- char * fileName;
- strncpy(fileName, packet+2, firstNull-message+2);
- return fileName;
+char * getFileName(char * packet){
+	 char * firstNull = strchr(packet, '\0');
+	 int fileLength = firstNull - (packet+2);
+	 char * fileName;
+	 strncpy(fileName, packet+2, fileLength);
+	 return fileName;
 }
 
