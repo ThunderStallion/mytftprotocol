@@ -9,7 +9,7 @@
 
 #define TIMEOUT 600
 #define MAXPENDINGS 10
-#define PORT 6100
+#define PORT 61008
 #define MAXDATALENGTH 512
 #define MAXPACKETLENGTH 2024
 
@@ -154,6 +154,7 @@ void handleRRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, 
 			memcpy(pkt_struct.data, outBuffer, dataSize);
 			char * dpkt = (char *)(&pkt_struct);
 
+
 			ssize_t numBytesSent = sendto(sock, dpkt, dataSize + 4 , 0,
 				(struct sockaddr *) &clientAddr, clientAddrLen);
 
@@ -162,6 +163,7 @@ void handleRRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, 
 				break;
 			}
 			printf("RRQ: Sending block# %d of data. Attempt #%d", blockNum, numOfAttempts);
+			printf("\n%s\n", outBuffer);
 
 			ssize_t numBytesRcvd = recvfrom(sock, recBuffer, MAXPACKETLENGTH, 0,
  			(struct sockaddr *) &clientAddr, &clientAddrLen);
