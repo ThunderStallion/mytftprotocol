@@ -4,6 +4,9 @@
 #include <time.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <netdb.h>
+#include <arpa/inet.h>
+#include "pack_structs.h"
 
 
 #define TIMEOUT 600
@@ -13,6 +16,7 @@
 
 char findOpcode(char packet[]);
 char * getFileName(char packet[]);
+char * createConnectRequest(int type, char * filename );
 
 int main(int argc, char **argv)
 {
@@ -47,6 +51,7 @@ int main(int argc, char **argv)
     hp = gethostbyname("localhost");
 	bcopy ( hp->h_addr, &(serverAddress.sin_addr.s_addr), hp->h_length);
     serverAddress.sin_port = htons(PORT); //local port
+    socklen_t serverAddrLen = sizeof(serverAddress);
 
     /*setting timeout struct*/
     struct timeval tv;
@@ -60,20 +65,52 @@ int main(int argc, char **argv)
     }
 
 	else{
+
+		char * filename = argv[2];
+		char * requestBuffer = createConnectRequest(1, filename);
+		int x = sendto(sock, requestBuffer, strlen(requestBuffer), 0, (struct sockaddr*)&serverAddress, serverAddrLen);
+        printf("Client: Request sent to server\n");
 		
+		int numOfBytesRec = recvfrom(sock, recBuffer, 2048, 0, (struct sockaddr*)&serverAddress, &serverAddrLen);
+		if(numOfBytesRec <= 0){
+			printf("Client: RECVFROM fail\n");
+
+		}
+		else{
+			printf("CLIENT: %s\n", recBuffer);
+		}
+
 	}
 
 	return 0;
 }
 
+char * createConnectRequest(int type, char * filename ){
+	struct RQPacket * pkt_struct;
+	char * mode = "octect";
+	if(type == 1)
+		pkt_struct->opCode = htons(01);
+	if(type == 2)
+		pkt_struct->opCode = htons(02);
+	memcpy(pkt_struct->filename, filename, sizeof(&filename));
+	pkt_struct->zb1 = '\0';
+	memcpy(pkt_struct->mode, &mode, 6*sizeof(char));
+	pkt_struct->zb2 = '\0';
+	char * dpkt = (char *)(&pkt_struct);
+	return dpkt;
+}
+
 char getOpcode(char * packet){
-	return packet[1];
+	char  opCode = 0;
+	memcpy(&opCode, packet+1, 1 * sizeof(char));
+
+	return opCode;
 }
 
 char * getFileName(char * packet){
-	 char * firstNull = strchr(packet, '\0');
+	 char * firstNull = strchr(packet+2, '\0');
 	 int fileLength = firstNull - (packet+2);
-	 char * fileName;
-	 strncpy(fileName, packet+2, fileLength);
+	 char * fileName = (char *) malloc(fileLength);
+	 memcpy(fileName, packet+2, fileLength);
 	 return fileName;
 }
