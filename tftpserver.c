@@ -17,7 +17,7 @@ char getOpcode(char packet[]);
 short getBlockNum(char * packet);
 char * getFileName(char packet[]);
 char * getErrorMessage(char * packet);
-char * handleRRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, socklen_t clientAddrLen);
+void handleRRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, socklen_t clientAddrLen);
 
 
 int main(int argc, char **argv)
@@ -128,7 +128,7 @@ char * getErrorMessage(char * packet){
 	return errMsg;
 }
 
-char * handleRRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, socklen_t clientAddrLen){
+void handleRRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, socklen_t clientAddrLen){
 	char outBuffer[MAXDATALENGTH];
 	char recBuffer[MAXDATALENGTH];
 	short blockNum = 1;
@@ -161,7 +161,7 @@ char * handleRRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr
 			 	printf("RRQ: SendTo Failed\n");
 				break;
 			}
-			printf("RRQ: Sending block# %d of data", blockNum);
+			printf("RRQ: Sending block# %d of data. Attempt #%d", blockNum, numOfAttempts);
 
 			ssize_t numBytesRcvd = recvfrom(sock, recBuffer, MAXPACKETLENGTH, 0,
  			(struct sockaddr *) &clientAddr, &clientAddrLen);
@@ -205,9 +205,14 @@ char * handleRRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr
 						
 				}
 			}
-;
+
+			if(numOfAttempts == MAXPENDINGS){
+				printf("RRQ: Exceeded Max attempts");
+
+			}
 			/*TO DO: If MAX-ATTEMPTS = 10 , send error Message*/
+			/*TO DO: Timer*/
 	}
-	return "finished";
+	return;
 }
 
