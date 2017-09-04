@@ -18,7 +18,7 @@ short getBlockNum(char * packet);
 char * getFileName(char packet[]);
 char * getErrorMessage(char * packet);
 void handleRRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, socklen_t clientAddrLen);
-
+void handleWRQ(int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, socklen_t clientAddrLen);
 
 int main(int argc, char **argv)
 {
@@ -53,7 +53,7 @@ int main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 	//mark socket to listen for incoming connections
-	
+
 	printf("Server will now start looping\n");
 	for(;;){
 
@@ -85,6 +85,13 @@ int main(int argc, char **argv)
 				}
 				/*WRQ*/
 				case 2:{
+					printf("Server: Received [Write Request]\n");
+
+					FILE * openFile = fopen(getFileName(recBuffer), "w");
+					handleWRQ(sock, openFile, &clientAddr,  clientAddrLen ); // WRITING
+					fclose(openFile);
+
+					printf("Server: Transmission Complete [Write Request]\n");
 					break;
 				}
 				default:{
@@ -128,6 +135,12 @@ char * getErrorMessage(char * packet){
 	return errMsg;
 }
 
+char * getData(char * packet) {
+	int datalength = DATASIZE;
+	char * data = (char *) malloc(dataLength);
+	memcpy(data, packet+4, dataLength);
+}
+
 void handleRRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, socklen_t clientAddrLen){
 	char outBuffer[MAXDATALENGTH];
 	char recBuffer[MAXDATALENGTH];
@@ -154,7 +167,6 @@ void handleRRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, 
 			memcpy(pkt_struct.data, outBuffer, dataSize);
 			char * dpkt = (char *)(&pkt_struct);
 
-
 			ssize_t numBytesSent = sendto(sock, dpkt, dataSize + 4 , 0,
 				(struct sockaddr *) &clientAddr, clientAddrLen);
 
@@ -167,14 +179,14 @@ void handleRRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, 
 
 			ssize_t numBytesRcvd = recvfrom(sock, recBuffer, MAXPACKETLENGTH, 0,
  			(struct sockaddr *) &clientAddr, &clientAddrLen);
-			
+
 
 
 			if(numBytesRcvd > 0){
 				switch(getOpcode(recBuffer)){
 
 					/*ACK IS RECEIVED*/
-					case 4:{ 
+					case 4:{
 						if(numBytesRcvd > 4){
 							printf("RRQ: ACK packet size too large");
 							break;
@@ -191,7 +203,7 @@ void handleRRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, 
 						else{
 							numOfAttempts++;
 							break;
-						}	
+						}
 						break;
 					}
 					case 5:{
@@ -204,7 +216,7 @@ void handleRRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, 
 					default:
 						printf("RRQ: received an out of place Opcode during transmission, DISREGARD\n");
 						break;
-						
+
 				}
 			}
 
@@ -218,3 +230,70 @@ void handleRRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, 
 	return;
 }
 
+// Receiving file from client
+void handleWRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, socklen_t clientAddrLen){
+
+	char dataBuffer[MAXDATALENGTH];
+	char inBuffer[RQSIZE];
+	int blockNum = 0;
+	int receiptComplete = 0;
+
+	while(receiptComplete == 0){
+
+		// Create the ack struct
+		struct ACKPacket ack_struct;
+		ack_struct.opCode = htons(ACK);
+		ack_struct.block_num = blockNum;
+
+		// TODO: implement numAttempts
+		// int numOfAttempts = 1;
+		while (1) {
+			memset(inBuffer, 0, MAXDATALENGTH * sizeof(char));
+			printf("WRQ: Sending block # %d of ACK", blockNum);
+			char * ackpkt = (char *)(&ack_struct);
+			ssize_t numBytesSent = sendto(sock, ackpkt, ACKSIZE, 0,
+				(struct sockaddr *) &clientAddr, clientAddrLen);
+			if (numBytesSent != ACKSIZE) {
+				printf("WRQ: SendTo Failed\n");
+				break;
+			}
+			ssize_t numBytesRcvd = recvfrom(sock, inBuffer, RQSIZE, 0,
+ 			NULL, NULL);
+			if(numBytesRcvd >= 0){
+
+				struct DATAPacket data_struct;
+				data_struct.opCode = getOpCode(inBuffer);
+				data_struct.blockNum = getBlockNum(inBuffer);
+				data_struct.data = getData(inBuffer);
+				memset(dataBuffer, 0, MAXDATALENGTH * sizeof(char));
+				short recBlockNum = getBlockNum(inBuffer);
+				printf("WRQ: Received Block %d", recBlockNum);
+				memcpy(dataBuffer, data_struct.data, dataSize);
+				if ((numBytesRcvd - 4) < MAXDATALENGTH) {
+					printf("WRQ: No more Data to receive\n");
+					receiptComplete = 1;
+				}
+				if (data_struct.blockNum > blockNum) {
+					blockNum = data_struct.blockNum;
+					fwrite(data, sizeof(char), numBytesRcvd - 4, requestedFile);
+					break;
+				}
+
+			}
+
+		}
+	}
+
+	struct ACKPacket ack_struct;
+	ack_struct.opCode = htons(ACK);
+	ack_struct.block_num = blockNum;
+	printf("WRQ: Sending block # %d of ACK", blockNum);
+	char * ackpkt = (char *)(&ack_struct);
+	ssize_t numBytesSent = sendto(sock, ackpkt, ACKSIZE, 0,
+		(struct sockaddr *) &clientAddr, clientAddrLen);
+	if (numBytesSent != ACKSIZE) {
+		printf("WRQ: SendTo Failed\n");
+	}
+
+	return;
+}
