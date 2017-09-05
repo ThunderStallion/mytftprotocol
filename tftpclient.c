@@ -18,9 +18,10 @@ char findOpcode(char packet[]);
 char * getFileName(char packet[]);
 char * createConnectRequest(int type, char * filename );
 
-int main(int argc, char **argv)
+int main(int argc, char *argv[])
 {
 	char recBuffer[512];
+	char * filename;
 	int rec;
 	int sock;
 	struct hostent *hp, *gethostbyname();
@@ -32,7 +33,7 @@ int main(int argc, char **argv)
 		perror("Server: socket could not be created");
 		exit(0);
 	}
-
+	printf("[CHECK] Socket was created\n");
 	/*initialize local addres structure*/
 	memset(&localAddress, 0 , sizeof(localAddress)); //zero out structure
     localAddress.sin_family = AF_INET; //AF_INET signifies IPv4 address family
@@ -44,7 +45,7 @@ int main(int argc, char **argv)
 		perror("bind failed");
 		return 0;
 	}  
-
+	printf("[CHECK] Bind successful\n");
 	/*set up serverAddress structure*/
 	memset(&serverAddress, 0 , sizeof(serverAddress)); //zero out structure
     serverAddress.sin_family = AF_INET; //AF_INET signifies IPv4 address family
@@ -65,8 +66,10 @@ int main(int argc, char **argv)
     }
 
 	else{
+		printf("[CHECK] Correct # of Arguments\n");
+		filename = strdup(argv[2]);
+		printf("[CHECK] The filename is %s\n", filename);
 
-		char * filename = argv[2];
 		char * requestBuffer = createConnectRequest(1, filename);
 		int x = sendto(sock, requestBuffer, strlen(requestBuffer), 0, (struct sockaddr*)&serverAddress, serverAddrLen);
         printf("Client: Request sent to server\n");
@@ -86,11 +89,16 @@ int main(int argc, char **argv)
 }
 
 char * createConnectRequest(int type, char * filename ){
+	printf("[CHECK] In connect Request\n");
+
+
 	struct RQPacket * pkt_struct;
+	pkt_struct = malloc(sizeof(struct RQPacket));
 	char * mode = "octect";
+	pkt_struct->opCode = 1;
 	if(type == 1)
 		pkt_struct->opCode = htons(01);
-	if(type == 2)
+	else if(type == 2)
 		pkt_struct->opCode = htons(02);
 	memcpy(pkt_struct->filename, filename, sizeof(&filename));
 	pkt_struct->zb1 = '\0';
