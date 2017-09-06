@@ -26,7 +26,7 @@ int main(int argc, char *argv[])
 	int sock;
 	struct hostent *hp, *gethostbyname();
 	struct sockaddr_in localAddress, serverAddress;  //Client address
-	
+
 	/*Create a socket */
 	sock = socket(AF_INET,SOCK_DGRAM, 0);
 	if (sock < 0){
@@ -44,7 +44,7 @@ int main(int argc, char *argv[])
     if (bind(sock, (struct sockaddr *)&localAddress, sizeof(localAddress)) < 0) {
 		perror("bind failed");
 		return 0;
-	}  
+	}
 	printf("[CHECK] Bind successful\n");
 	/*set up serverAddress structure*/
 	memset(&serverAddress, 0 , sizeof(serverAddress)); //zero out structure
@@ -70,10 +70,17 @@ int main(int argc, char *argv[])
 		filename = strdup(argv[2]);
 		printf("[CHECK] The filename is %s\n", filename);
 
-		char * requestBuffer = createConnectRequest(1, filename, strlen(filename));
+		int type = -1;
+		if(strcmp(argv[1], "-r")) type = 1;
+		else if(strcmp(argv[2], "-w")) type = 2;
+		else {
+			perror("[ERROR] Incorrect option for RW; use -w or -r\n");
+			return 0;
+		}
+		char * requestBuffer = createConnectRequest(type, filename, strlen(filename));
 		int x = sendto(sock, requestBuffer, strlen(requestBuffer), 0, (struct sockaddr*)&serverAddress, serverAddrLen);
-        printf("Client: Request sent to server\n");
-		
+    printf("Client: Request sent to server\n");
+
 		int numOfBytesRec = recvfrom(sock, recBuffer, 2048, 0, (struct sockaddr*)&serverAddress, &serverAddrLen);
 		if(numOfBytesRec <= 0){
 			printf("Client: RECVFROM fail\n");
@@ -108,7 +115,7 @@ char * createConnectRequest(int type, char * filename, size_t len ){
 	memcpy(pkt_ptr+2+len, &zb1 , 1);
 	memcpy(pkt_ptr+3+len, mode , 6);
 	memcpy(pkt_ptr+9+len, &zb2 , 1);
-	printPacket(pkt_ptr);	
+	printPacket(pkt_ptr);
 	return pkt_ptr;
 }
 

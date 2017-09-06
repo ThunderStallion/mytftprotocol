@@ -11,14 +11,6 @@
 #define ACK 4
 #define ERROR 5
 
-struct RQPacket{
-	short opCode;
-	char*filename[];
-	char zb1;
-	char mode;
-	char zb2;
-};
-
 struct DATAPacket{
 	short opCode;
 	short block_num;

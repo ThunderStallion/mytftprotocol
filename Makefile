@@ -8,7 +8,7 @@ all: server client
 
 server:
 	${GCC} tftpserver.c ${FLAG} tftpserver
-client: 
+client:
 	${GCC} tftpclient.c ${FLAG} tftpclient
 clean:
-	rm *.o tftpserver tftpclient
+	rm tftpserver tftpclient
