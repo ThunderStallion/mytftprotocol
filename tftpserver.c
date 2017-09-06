@@ -9,15 +9,15 @@
 
 #define TIMEOUT 600
 #define MAXPENDINGS 10
-#define PORT 61008
+#define PORT 61005
 #define MAXDATALENGTH 512
 #define MAXPACKETLENGTH 2024
 
-char getOpcode(char packet[]);
+short getOpcode(char packet[]);
 short getBlockNum(char * packet);
 char * getFileName(char packet[]);
 char * getErrorMessage(char * packet);
-void printPacket(char * packet);
+void printPacket(char * packet, int size);
 
 void handleRRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, socklen_t clientAddrLen);
 //void handleWRQ(int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, socklen_t clientAddrLen);
@@ -30,7 +30,10 @@ int main(int argc, char **argv)
 
 	/*Create a socket */
 	sock = socket(AF_INET,SOCK_DGRAM, 0);
-
+	if (sock < 0){
+		perror("[Server] socket could not be created");
+		exit(0);
+	}
 	/*initialize socket structure*/
 	struct sockaddr_in server;  //server address
 	memset(&server, 0 , sizeof(server)); //zero out structure
@@ -44,61 +47,61 @@ int main(int argc, char **argv)
     tv.tv_usec = 0;
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (char *)&tv, sizeof(struct timeval));
 
-
-	if (sock < 0){
-		perror("Server: socket could not be created");
-		exit(0);
-	}
 	/*using bind, socket now becomes a server)*/
 	if (bind(sock, (struct sockaddr *) &server, sizeof(server)) < 0){
-		perror("bind");
-		exit(EXIT_FAILURE);
+		perror("[Server] Binding socket failure. EXIT\n");
+		return 0;
 	}
 	//mark socket to listen for incoming connections
 
-	printf("Server will now start looping\n");
+	printf("[Server] Connection Successful, awaiting Requests\n");
 	for(;;){
 
 		char buffer[MAXDATALENGTH];
-
 		struct sockaddr_in clientAddr; //client address
 		socklen_t clientAddrLen = sizeof(clientAddr);
 
 		// Size of received message
 		ssize_t numBytesRcvd = recvfrom(sock, recBuffer, MAXPACKETLENGTH, 0,
  			(struct sockaddr *) &clientAddr, &clientAddrLen);
-		printPacket(recBuffer);
+
+		printPacket(recBuffer, numBytesRcvd);
+
 		if (numBytesRcvd < 0){
-			perror("Server: recvd fail");
+			perror("[Server] recvd fail");
 			exit(EXIT_FAILURE);
 		}
 
+		short opCode = ntohs(getOpcode(recBuffer));
+		printf("[Server] Received a reply from client with opcode: %d\n", opCode);
+
+
 		if(numBytesRcvd >0) {
-			switch(getOpcode(recBuffer)){
+			switch(opCode){
 				/*RRQ*/
 				case 1:{
-					printf("Server: Received [Read Request]\n");
+					printf("[Server] Received [Read Request]\n");
 
 					FILE * openFile = fopen(getFileName(recBuffer), "r");
 					handleRRQ(sock, openFile,&clientAddr,  clientAddrLen ); // WRITING
 					fclose(openFile);
 
-					printf("Server: Transmission Complete [Read Request]\n");
+					printf("[Server] Transmission Complete [Read Request]\n");
 					break;
 				}
 				/*WRQ*/
 				case 2:{
-					printf("Server: Received [Write Request]\n");
+					printf("[Server] Received [Write Request]\n");
 
 					FILE * openFile = fopen(getFileName(recBuffer), "w");
 					//handleWRQ(sock, openFile, &clientAddr,  clientAddrLen ); // WRITING
 					fclose(openFile);
 
-					printf("Server: Transmission Complete [Write Request]\n");
+					printf("[Server] Transmission Complete [Write Request]\n");
 					break;
 				}
 				default:{
-					printf("Server: Error No RRQ/WRQ Made\n");
+					printf("[Server] Error No RRQ/WRQ Made\n");
 					break;
 				}
 			}
@@ -108,9 +111,9 @@ int main(int argc, char **argv)
 	return 0;
 }
 
-char  getOpcode(char * packet){
-	char  opCode = 0;
-	memcpy(&opCode, packet+1, 1 * sizeof(char));
+short  getOpcode(char * packet){
+	short  opCode = 0;
+	memcpy(&opCode, packet, 1 * sizeof(short));
 
 	return opCode;
 }
@@ -147,7 +150,7 @@ char * getData(char * packet) {
 }
 
 char * createDataPacket(int blockNum, char * message, int size){
-	printf("[CHECK] Creating dataPacket\n");
+	printf("[Server] Creating Data Packet\n");
 
 	int length = size+4;
 	char * pkt_ptr = malloc(length);
@@ -156,59 +159,62 @@ char * createDataPacket(int blockNum, char * message, int size){
 	memcpy(pkt_ptr, &opCode , 2);
 	memcpy(pkt_ptr+2, &blockNum, 2);
 	memcpy(pkt_ptr+4, message , size);
-	printPacket(pkt_ptr, length);	
 	return pkt_ptr;
 }
 
 void handleRRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, socklen_t clientAddrLen){
-	char outBuffer[MAXDATALENGTH];
-	char recBuffer[MAXDATALENGTH];
-	short blockNum = 1;
-	int sendComplete = 0;
+	char outBuffer[MAXDATALENGTH]; //buffer to read in file
+	char recBuffer[MAXDATALENGTH]; //buffer to receive messages from client
+	short blockNum = 0;
+	int sendComplete = 0; //bool to continue loop
 
 	while(sendComplete==0){
 
-		memset(outBuffer, 0, MAXDATALENGTH * sizeof(char));
+		memset(outBuffer, 0, MAXDATALENGTH * sizeof(char)); //reset buffer to 0
 		int dataSize = fread(outBuffer, 1, MAXDATALENGTH, requestedFile);
+
 		if(dataSize <= 0){
-			printf("RRQ: No more Data to send\n");
+			printf("[Server] RRQ: No more Data to send\n");
 			sendComplete =1;
 			break;
 		}
 
 		int numOfAttempts = 0;
 		int ack_rec = 0;
+		blockNum++;
 
 		while(numOfAttempts < MAXPENDINGS && ack_rec == 0){
 			
 			char * dpkt = createDataPacket(blockNum, outBuffer, dataSize);
 
-			printf("RRQ: Sending block# %d of data. Attempt #%d", blockNum, numOfAttempts);
+			printf("[Server] RRQ: Sending block# %d of data. Attempt #%d", blockNum, numOfAttempts);
 			printf("\n%s\n", outBuffer);
-			ssize_t numBytesSent = sendto(sock, dpkt, dataSize + 4 , 0,
+			size_t numBytesSent = sendto(sock, dpkt, dataSize + 4 , 0,
 				(struct sockaddr *) &clientAddr, clientAddrLen);
 
-			if (numBytesSent < 0)
-			 	printf("RRQ: SendTo Failed\n");
+			if (numBytesSent <= 0)
+			 	printf("[Server] RRQ: SendTo Failed\n");
 				break;
 			}
 
 			ssize_t numBytesRcvd = recvfrom(sock, recBuffer, MAXPACKETLENGTH, 0,
  			(struct sockaddr *) &clientAddr, &clientAddrLen);
 
+			short opCode = getOpcode(recBuffer);
 
+			printf("[Server] Received a reply from client with opcode: %d\n", opCode);
 
 			if(numBytesRcvd > 0){
-				switch(getOpcode(recBuffer)){
+				switch(opCode){
 
 					/*ACK IS RECEIVED*/
 					case 4:{
 						if(numBytesRcvd > 4){
-							printf("RRQ: ACK packet size too large");
+							printf("[Server] RRQ: ACK packet size too large");
 							break;
 						}
 						short ackNum = getBlockNum(recBuffer);
-						printf("RRQ: Received ACK %d", ackNum);
+						printf("[Server] RRQ: Received ACK %d", ackNum);
 						//if ack matches block number, move on to next Data
 						if(ackNum == blockNum){
 							blockNum++;
@@ -224,13 +230,13 @@ void handleRRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, 
 					}
 					case 5:{
 						char * errMsg = getErrorMessage(recBuffer);
-						printf("RRQ: [ERROR] %s\n", errMsg);
+						printf("[Server] RRQ: [ERROR] %s\n", errMsg);
 						sendComplete = 1;
 						ack_rec = 1;
 						break;
 					}
 					default:
-						printf("RRQ: received an out of place Opcode during transmission, DISREGARD\n");
+						printf("[Server] RRQ: received an out of place Opcode during transmission, DISREGARD\n");
 						break;
 
 				}
