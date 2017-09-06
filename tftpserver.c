@@ -137,8 +137,9 @@ char * getErrorMessage(char * packet){
 
 char * getData(char * packet) {
 	int datalength = DATASIZE;
-	char * data = (char *) malloc(dataLength);
-	memcpy(data, packet+4, dataLength);
+	char * data = (char *) malloc(datalength);
+	memcpy(data, packet+4, datalength);
+	return data;
 }
 
 void handleRRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, socklen_t clientAddrLen){
@@ -262,20 +263,20 @@ void handleWRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, 
 			if(numBytesRcvd >= 0){
 
 				struct DATAPacket data_struct;
-				data_struct.opCode = getOpCode(inBuffer);
-				data_struct.blockNum = getBlockNum(inBuffer);
-				data_struct.data = getData(inBuffer);
+				data_struct.opCode = getOpcode(inBuffer);
+				data_struct.block_num = getBlockNum(inBuffer);
+				memcpy(data_struct.data, inBuffer, DATASIZE);
 				memset(dataBuffer, 0, MAXDATALENGTH * sizeof(char));
 				short recBlockNum = getBlockNum(inBuffer);
 				printf("WRQ: Received Block %d", recBlockNum);
-				memcpy(dataBuffer, data_struct.data, dataSize);
+				memcpy(dataBuffer, data_struct.data, DATASIZE);
 				if ((numBytesRcvd - 4) < MAXDATALENGTH) {
 					printf("WRQ: No more Data to receive\n");
 					receiptComplete = 1;
 				}
-				if (data_struct.blockNum > blockNum) {
-					blockNum = data_struct.blockNum;
-					fwrite(data, sizeof(char), numBytesRcvd - 4, requestedFile);
+				if (data_struct.block_num > blockNum) {
+					blockNum = data_struct.block_num;
+					fwrite(data_struct.data, sizeof(char), numBytesRcvd - 4, requestedFile);
 					break;
 				}
 
