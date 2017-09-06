@@ -13,9 +13,9 @@
 
 struct RQPacket{
 	short opCode;
-	char filename[MAXFILENAMESIZE];
+	char*filename[];
 	char zb1;
-	char mode[8];
+	char mode;
 	char zb2;
 };
 

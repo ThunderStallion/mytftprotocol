@@ -14,15 +14,15 @@
 #define PORT 61008
 #define MAXSTRINGLENGTH 512;
 
-char findOpcode(char packet[]);
+char getOpcode(char * packet);
 char * getFileName(char packet[]);
-char * createConnectRequest(int type, char * filename );
+char * createConnectRequest(int type, char * filename , size_t len);
+void printPacket(char * packet);
 
 int main(int argc, char *argv[])
 {
 	char recBuffer[512];
 	char * filename;
-	int rec;
 	int sock;
 	struct hostent *hp, *gethostbyname();
 	struct sockaddr_in localAddress, serverAddress;  //Client address
@@ -70,7 +70,7 @@ int main(int argc, char *argv[])
 		filename = strdup(argv[2]);
 		printf("[CHECK] The filename is %s\n", filename);
 
-		char * requestBuffer = createConnectRequest(1, filename);
+		char * requestBuffer = createConnectRequest(1, filename, strlen(filename));
 		int x = sendto(sock, requestBuffer, strlen(requestBuffer), 0, (struct sockaddr*)&serverAddress, serverAddrLen);
         printf("Client: Request sent to server\n");
 		
@@ -88,31 +88,43 @@ int main(int argc, char *argv[])
 	return 0;
 }
 
-char * createConnectRequest(int type, char * filename ){
+char * createConnectRequest(int type, char * filename, size_t len ){
 	printf("[CHECK] In connect Request\n");
 
-
-	struct RQPacket * pkt_struct;
-	pkt_struct = malloc(sizeof(struct RQPacket));
+	int length = len +2+ 6+2;
+	char * pkt_ptr = malloc(length);
+	short opCode = 0;
 	char * mode = "octect";
-	pkt_struct->opCode = 1;
+	char zb1 = '\0';
+	char zb2 = '\0';
+
 	if(type == 1)
-		pkt_struct->opCode = htons(01);
+		opCode = htons(01);
 	else if(type == 2)
-		pkt_struct->opCode = htons(02);
-	memcpy(pkt_struct->filename, filename, sizeof(&filename));
-	pkt_struct->zb1 = '\0';
-	memcpy(pkt_struct->mode, &mode, 6*sizeof(char));
-	pkt_struct->zb2 = '\0';
-	char * dpkt = (char *)(&pkt_struct);
-	return dpkt;
+		opCode = htons(02);
+
+	memcpy(pkt_ptr, &opCode , 2);
+	memcpy(pkt_ptr+2, filename , len);
+	memcpy(pkt_ptr+2+len, &zb1 , 1);
+	memcpy(pkt_ptr+3+len, mode , 6);
+	memcpy(pkt_ptr+9+len, &zb2 , 1);
+	printPacket(pkt_ptr);	
+	return pkt_ptr;
 }
 
 char getOpcode(char * packet){
 	char  opCode = 0;
 	memcpy(&opCode, packet+1, 1 * sizeof(char));
-
 	return opCode;
+}
+
+void printPacket(char * packet){
+	for(int x=0 ; x<2; x++){
+		printf("[%d]: %d\n", x, packet[x]);
+	}
+	for(int x= 2 ; x<17; x++){
+		printf("[%d]: %c\n", x, packet[x]);
+	}
 }
 
 char * getFileName(char * packet){
