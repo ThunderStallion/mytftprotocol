@@ -13,7 +13,7 @@
 
 struct RQPacket{
 	short opCode;
-	char*filename[];
+	char** filename;
 	char zb1;
 	char mode;
 	char zb2;

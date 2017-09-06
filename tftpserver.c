@@ -17,8 +17,10 @@ char getOpcode(char packet[]);
 short getBlockNum(char * packet);
 char * getFileName(char packet[]);
 char * getErrorMessage(char * packet);
+void printPacket(char * packet);
+
 void handleRRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, socklen_t clientAddrLen);
-void handleWRQ(int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, socklen_t clientAddrLen);
+//void handleWRQ(int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, socklen_t clientAddrLen);
 
 int main(int argc, char **argv)
 {
@@ -65,8 +67,9 @@ int main(int argc, char **argv)
 		// Size of received message
 		ssize_t numBytesRcvd = recvfrom(sock, recBuffer, MAXPACKETLENGTH, 0,
  			(struct sockaddr *) &clientAddr, &clientAddrLen);
-		if (numBytesRcvd <= 0){
-			perror("recvd fail");
+		printPacket(recBuffer);
+		if (numBytesRcvd < 0){
+			perror("Server: recvd fail");
 			exit(EXIT_FAILURE);
 		}
 
@@ -88,7 +91,7 @@ int main(int argc, char **argv)
 					printf("Server: Received [Write Request]\n");
 
 					FILE * openFile = fopen(getFileName(recBuffer), "w");
-					handleWRQ(sock, openFile, &clientAddr,  clientAddrLen ); // WRITING
+					//handleWRQ(sock, openFile, &clientAddr,  clientAddrLen ); // WRITING
 					fclose(openFile);
 
 					printf("Server: Transmission Complete [Write Request]\n");
@@ -137,8 +140,24 @@ char * getErrorMessage(char * packet){
 
 char * getData(char * packet) {
 	int datalength = DATASIZE;
-	char * data = (char *) malloc(dataLength);
-	memcpy(data, packet+4, dataLength);
+	char * data = (char *) malloc(datalength);
+	memcpy(data, packet+4, datalength);
+
+	return data;
+}
+
+char * createDataPacket(int blockNum, char * message, int size){
+	printf("[CHECK] Creating dataPacket\n");
+
+	int length = size+4;
+	char * pkt_ptr = malloc(length);
+	short opCode = htons(03);
+
+	memcpy(pkt_ptr, &opCode , 2);
+	memcpy(pkt_ptr+2, &blockNum, 2);
+	memcpy(pkt_ptr+4, message , size);
+	printPacket(pkt_ptr, length);	
+	return pkt_ptr;
 }
 
 void handleRRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, socklen_t clientAddrLen){
@@ -161,12 +180,11 @@ void handleRRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, 
 		int ack_rec = 0;
 
 		while(numOfAttempts < MAXPENDINGS && ack_rec == 0){
-			struct DATAPacket pkt_struct;
-			pkt_struct.opCode = htons(3);
-			pkt_struct.block_num = htons(blockNum);
-			memcpy(pkt_struct.data, outBuffer, dataSize);
-			char * dpkt = (char *)(&pkt_struct);
+			
+			char * dpkt = createDataPacket(blockNum, outBuffer, dataSize);
 
+			printf("RRQ: Sending block# %d of data. Attempt #%d", blockNum, numOfAttempts);
+			printf("\n%s\n", outBuffer);
 			ssize_t numBytesSent = sendto(sock, dpkt, dataSize + 4 , 0,
 				(struct sockaddr *) &clientAddr, clientAddrLen);
 
@@ -174,8 +192,6 @@ void handleRRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, 
 			 	printf("RRQ: SendTo Failed\n");
 				break;
 			}
-			printf("RRQ: Sending block# %d of data. Attempt #%d", blockNum, numOfAttempts);
-			printf("\n%s\n", outBuffer);
 
 			ssize_t numBytesRcvd = recvfrom(sock, recBuffer, MAXPACKETLENGTH, 0,
  			(struct sockaddr *) &clientAddr, &clientAddrLen);
@@ -231,7 +247,7 @@ void handleRRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, 
 }
 
 // Receiving file from client
-void handleWRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, socklen_t clientAddrLen){
+/*void handleWRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, socklen_t clientAddrLen){
 
 	char dataBuffer[MAXDATALENGTH];
 	char inBuffer[RQSIZE];
@@ -296,4 +312,14 @@ void handleWRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, 
 	}
 
 	return;
+}
+*/
+
+void printPacket(char * packet, int size){
+	for(int x=0 ; x<2; x++){
+		printf("[%d]: %d\n", x, packet[x]);
+	}
+	for(int x= 2 ; x<size; x++){
+		printf("[%d]: %c\n", x, packet[x]);
+	}
 }

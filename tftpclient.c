@@ -12,17 +12,19 @@
 #define TIMEOUT 600
 #define MAXPENDINGS 10
 #define PORT 61008
-#define MAXSTRINGLENGTH 512;
+#define MAXSTRINGLENGTH 512
+#define REQUESTHDR 10
 
-char getOpcode(char * packet);
+int getOpcode(char * packet);
 char * getFileName(char packet[]);
 char * createConnectRequest(int type, char * filename , size_t len);
-void printPacket(char * packet);
+void printPacket(char * packet, int size);
 
 int main(int argc, char *argv[])
 {
 	char recBuffer[512];
 	char * filename;
+	int attempts;
 	int sock;
 	struct hostent *hp, *gethostbyname();
 	struct sockaddr_in localAddress, serverAddress;  //Client address
@@ -71,13 +73,14 @@ int main(int argc, char *argv[])
 		printf("[CHECK] The filename is %s\n", filename);
 
 		char * requestBuffer = createConnectRequest(1, filename, strlen(filename));
-		int x = sendto(sock, requestBuffer, strlen(requestBuffer), 0, (struct sockaddr*)&serverAddress, serverAddrLen);
-        printf("Client: Request sent to server\n");
+		int x = sendto(sock, requestBuffer, strlen(filename)+REQUESTHDR,
+			 0, (struct sockaddr*)&serverAddress, serverAddrLen);
+        printf("Client: Request of %d bytes sent to server\n", x);
 		
 		int numOfBytesRec = recvfrom(sock, recBuffer, 2048, 0, (struct sockaddr*)&serverAddress, &serverAddrLen);
 		if(numOfBytesRec <= 0){
-			printf("Client: RECVFROM fail\n");
-
+			perror("Client: recvfom has failed\n");
+			return 0;
 		}
 		else{
 			printf("CLIENT: %s\n", recBuffer);
@@ -91,7 +94,7 @@ int main(int argc, char *argv[])
 char * createConnectRequest(int type, char * filename, size_t len ){
 	printf("[CHECK] In connect Request\n");
 
-	int length = len +2+ 6+2;
+	int length = len+ REQUESTHDR; //opCode[2] + filename[len] + mode[6]+zerobytes[2]
 	char * pkt_ptr = malloc(length);
 	short opCode = 0;
 	char * mode = "octect";
@@ -112,17 +115,17 @@ char * createConnectRequest(int type, char * filename, size_t len ){
 	return pkt_ptr;
 }
 
-char getOpcode(char * packet){
+int getOpcode(char * packet){
 	char  opCode = 0;
 	memcpy(&opCode, packet+1, 1 * sizeof(char));
 	return opCode;
 }
 
-void printPacket(char * packet){
+void printPacket(char * packet, int size){
 	for(int x=0 ; x<2; x++){
 		printf("[%d]: %d\n", x, packet[x]);
 	}
-	for(int x= 2 ; x<17; x++){
+	for(int x= 2 ; x<size; x++){
 		printf("[%d]: %c\n", x, packet[x]);
 	}
 }
