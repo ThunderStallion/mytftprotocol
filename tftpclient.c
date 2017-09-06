@@ -11,13 +11,16 @@
 
 #define TIMEOUT 600
 #define MAXPENDINGS 10
-#define PORT 61008
+#define PORT 61005
 #define MAXSTRINGLENGTH 512
 #define REQUESTHDR 10
 
 int getOpcode(char * packet);
 char * getFileName(char packet[]);
+short getBlockNumber(char * packet);
+char * getDataPacket(char * packet, int size);
 char * createConnectRequest(int type, char * filename , size_t len);
+char * createAckPacket(int blockNum);
 void printPacket(char * packet, int size);
 
 int main(int argc, char *argv[])
@@ -32,10 +35,10 @@ int main(int argc, char *argv[])
 	/*Create a socket */
 	sock = socket(AF_INET,SOCK_DGRAM, 0);
 	if (sock < 0){
-		perror("Server: socket could not be created");
+		perror("[Client] socket could not be created");
 		exit(0);
 	}
-	printf("[CHECK] Socket was created\n");
+	printf("[Client] Socket was created\n");
 	/*initialize local addres structure*/
 	memset(&localAddress, 0 , sizeof(localAddress)); //zero out structure
     localAddress.sin_family = AF_INET; //AF_INET signifies IPv4 address family
@@ -44,10 +47,10 @@ int main(int argc, char *argv[])
 
     /*bind socket to address*/
     if (bind(sock, (struct sockaddr *)&localAddress, sizeof(localAddress)) < 0) {
-		perror("bind failed");
+		perror("[Client] Binding socket failure. EXIT\n");
 		return 0;
 	}  
-	printf("[CHECK] Bind successful\n");
+	printf("[Client] Binding socket to address successful\n");
 	/*set up serverAddress structure*/
 	memset(&serverAddress, 0 , sizeof(serverAddress)); //zero out structure
     serverAddress.sin_family = AF_INET; //AF_INET signifies IPv4 address family
@@ -63,28 +66,54 @@ int main(int argc, char *argv[])
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (char *)&tv, sizeof(struct timeval));
 
     if(argc != 3){
-    	perror("[ERROR] Incorrect # of Arguments\n");
+    	perror("[Client] ERROR: Incorrect # of Arguments. EXIT\n");
     	return 0;
     }
 
 	else{
-		printf("[CHECK] Correct # of Arguments\n");
-		filename = strdup(argv[2]);
-		printf("[CHECK] The filename is %s\n", filename);
 
+		/*Everything im doing now is simply for the RRQ portion. refactor later for WRQ*/
+		printf("[Client] Correct # of Arguments\n");
+		filename = strdup(argv[2]);
+		printf("[Client] Requesting file: %s\n", filename);
+
+		//Choose Read or Write
+		int type = -1;
+		if(strcmp(argv[1], "-r")) type = 1;
+		else if(strcmp(argv[2], "-w")) type = 2;
+		else {
+			perror("[Client] ERROR: Incorrect option for RW; use -w or -r\n");
+			return 0;
+		}
+
+		/*creates first RRQ and send*/
 		char * requestBuffer = createConnectRequest(1, filename, strlen(filename));
 		int x = sendto(sock, requestBuffer, strlen(filename)+REQUESTHDR,
 			 0, (struct sockaddr*)&serverAddress, serverAddrLen);
-        printf("Client: Request of %d bytes sent to server\n", x);
+        printf("[Client]: %d bytes are being sent to server\n", x);
 		
-		int numOfBytesRec = recvfrom(sock, recBuffer, 2048, 0, (struct sockaddr*)&serverAddress, &serverAddrLen);
-		if(numOfBytesRec <= 0){
-			perror("Client: recvfom has failed\n");
-			return 0;
+		
+		int processComplete = 0;
+		int ack_sent = 0;
+
+		while(processComplete == 0){
+			/*if succesful should receive the first data pack back*/
+			int numOfBytesRec = recvfrom(sock, recBuffer, 2048, 0, (struct sockaddr*)&serverAddress, &serverAddrLen);
+			if(numOfBytesRec <= 0){
+				perror("[Client]: Recvfom failed. EXIT\n");
+				return 0;
+			}
+			short blockNum = getBlockNumber(recBuffer);
+			printf("[CLIENT]: Packet #%d Recieved from peer -- \n %s\n", blockNum, recBuffer);
+			char * ackPkt = createAckPacket(blockNum);
+			printf("[Client]: Creating Ack Packet #%d", blockNum);
+			ack_sent = blockNum;
+			int x = sendto(sock, ackPkt, 4,
+		 	0, (struct sockaddr*)&serverAddress, serverAddrLen);
+    		printf("[Client]: %d bytes are being sent to server\n", x);
+
 		}
-		else{
-			printf("CLIENT: %s\n", recBuffer);
-		}
+		
 
 	}
 
@@ -92,7 +121,7 @@ int main(int argc, char *argv[])
 }
 
 char * createConnectRequest(int type, char * filename, size_t len ){
-	printf("[CHECK] In connect Request\n");
+	printf("[Client] creating connection request packet\n");
 
 	int length = len+ REQUESTHDR; //opCode[2] + filename[len] + mode[6]+zerobytes[2]
 	char * pkt_ptr = malloc(length);
@@ -111,7 +140,16 @@ char * createConnectRequest(int type, char * filename, size_t len ){
 	memcpy(pkt_ptr+2+len, &zb1 , 1);
 	memcpy(pkt_ptr+3+len, mode , 6);
 	memcpy(pkt_ptr+9+len, &zb2 , 1);
-	printPacket(pkt_ptr);	
+	printPacket(pkt_ptr, length);	
+	return pkt_ptr;
+}
+
+char * createAckPacket(int blockNum){
+	char * pkt_ptr = malloc(4);
+	short opCode = htons(04);
+	short blockNumber = htons(blockNum);
+	memcpy(pkt_ptr, &opCode , 2);
+	memcpy(pkt_ptr+2, &blockNumber , 2);
 	return pkt_ptr;
 }
 
@@ -119,6 +157,16 @@ int getOpcode(char * packet){
 	char  opCode = 0;
 	memcpy(&opCode, packet+1, 1 * sizeof(char));
 	return opCode;
+}
+short getBlockNumber(char * packet){
+	short blockNum=0;
+	memcpy(&blockNum, packet+2, 2);
+	return blockNum;
+}
+char * getDataPacket(char * packet, int size){
+	char * data = malloc(size);
+	memcpy(data, packet+4, size);
+	return data;
 }
 
 void printPacket(char * packet, int size){
