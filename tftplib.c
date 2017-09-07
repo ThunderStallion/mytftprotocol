@@ -53,6 +53,12 @@ char * getErrorMessage(char * packet){
 	return errMsg;
 }
 
+char * getErrorCode(char * packet) {
+	char * code = malloc(2);
+	memcpy(code, packet+2, 2);
+	return code;
+}
+
 void printPacket(char * packet, int size){
 	for(int x=0 ; x<2; x++){
 		printf("[%d]: %d\n", x, packet[x]);

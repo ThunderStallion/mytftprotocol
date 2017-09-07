@@ -86,7 +86,7 @@ int main(int argc, char **argv)
 				}
 				default:{
 					printf("[Server] Error. Please make a Read/Write request first\n");
-					break;
+					return 0;
 				}
 			}
 		}
@@ -103,6 +103,7 @@ void handleRRQ( int sock, char * filename, struct sockaddr_in clientAddr, sockle
 	short blockNum = 0;
 	int sendComplete = 0; //bool to continue loop
 	FILE * requestedFile = fopen(filename, "r");
+	time_t start;
 
 	while(sendComplete==0){
 
@@ -119,36 +120,43 @@ void handleRRQ( int sock, char * filename, struct sockaddr_in clientAddr, sockle
 		int ack_rec = 0;
 		blockNum++;
 
-		while(numOfAttempts < MAXPENDINGS && ack_rec == 0){
+		while(numOfAttempts <= MAXPENDINGS && ack_rec == 0){
+			
+			if(numOfAttempts == MAXPENDINGS){
+				printf("[Server] RRQ: Exceeded Max attempts. Exiting\n");
+				return;
+			}
+			start = clock();
 			memset(&recBuffer, 0, sizeof(recBuffer));
 			char * dpkt = createDataPacket(blockNum, fileBuffer, MAXDATALENGTH);
-			printf("[DATA] %s\n", getDataPacket(dpkt, dataSize));
-			printf("[Server] RRQ: Sending block# %d of data. Attempt #%d\n", blockNum, numOfAttempts);
+			printf("[Server] RRQ: Sending block#%d of data. Attempt #%d\n", blockNum, numOfAttempts);
 			size_t numBytesSent = sendto(sock, dpkt, dataSize+4, 0,
 				(struct sockaddr*) &clientAddr, clientAddrLen);
 			printf("[Server] RRQ has sent %zu bytes\n", numBytesSent);
-			if (numBytesSent <= 0){
-			 	printf("[Server] RRQ: SendTo Failed\n");
+			if (numBytesSent < 0){
+			 	printf("[Server] RRQ: SendTo Failed\n [ERROR] %s\n", strerror(errno));
+				return;
+			}
+			
+			if(clock() - start > TIMEOUT){
 				numOfAttempts++;
 				continue;
 			}
-			printf("[Server] Waiting on reply from client\n");
-			
+
 			size_t numBytesRcvd = recvfrom(sock, recBuffer, MAXPACKETLENGTH, 0,
  			(struct sockaddr *) &clientAddr, &clientAddrLen);
 
 			short opCode = ntohs(getOpcode(recBuffer));
 			short blockNum = ntohs(getBlockNumber(recBuffer));
-			printf("[Server] Received a reply from client w/ opcode: %d & blockNum: %d \n", opCode, blockNum);
+
+			printf("[Server] Received a reply from client for blockNum: %d \n", opCode, blockNum);
 			if(numBytesRcvd < 0){
-				printf("[Server] Nothing received from client, reattempt.");
+				printf("[Server] Error receiving from client, reattempt.");
 				numOfAttempts++;
 				break;
 			}
-
 		
 			switch(opCode){
-
 				/*ACK IS RECEIVED*/
 				case 4:{
 					if(numBytesRcvd > 4){
@@ -172,19 +180,15 @@ void handleRRQ( int sock, char * filename, struct sockaddr_in clientAddr, sockle
 					printf("[Server] RRQ: [ERROR] %s\n", errMsg);
 					sendComplete = 1;
 					ack_rec = 1;
+					return;
 					break;
 				}
 				default:{
 					printf("[Server] RRQ: received an out of place Opcode during transmission, DISREGARD\n");
-					return;
+					numOfAttempts++;
 					break;
 				}
 			}	
-
-			if(numOfAttempts == MAXPENDINGS){
-				printf("[Server] RRQ: Exceeded Max attempts. Exiting\n");
-				return;
-			}
 		}
 	}
 	fclose(requestedFile);
