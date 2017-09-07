@@ -22,6 +22,7 @@ short getOpcode(char * packet);
 short getBlockNumber(char * packet);
 char * getDataPacket(char * packet, int size);
 char * getErrorMessage(char * packet);
+char * getErrorCode(char * packet);
 
 void printPacket(char * packet, int size);
 void printACKPacket(char * packet);
