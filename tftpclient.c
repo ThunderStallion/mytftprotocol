@@ -243,7 +243,7 @@ int handleWRQ(int sock, char * filename, struct sockaddr_in* serverAddress, sock
 
 				printf("[Client] WRQ: Sending block# %d of data. Attempt #%d", blockNum, numOfAttempts);
 				printf("\n[DATA]%s\n", dataToSend);
-				size_t numBytesSent = sendto(sock, dpkt, MAXDATALENGTH+4 , 0,
+				size_t numBytesSent = sendto(sock, dpkt, numBytesSent , 0,
 					(struct sockaddr_in *) serverAddress, serverAddrLen);
 				printf("[Client] WRQ has sent %d bytes\n", numBytesSent);
 				if (numBytesSent <= 0)
