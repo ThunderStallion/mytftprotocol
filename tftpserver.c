@@ -7,11 +7,11 @@
 #include <sys/socket.h>
 
 
-#define TIMEOUT 600
+#define TIMEOUT 60
 #define MAXPENDINGS 10
 #define PORT 61005
 #define MAXDATALENGTH 512
-#define MAXPACKETLENGTH 2024
+#define MAXPACKETLENGTH 2048
 
 short getOpcode(char packet[]);
 short getBlockNum(char * packet);
@@ -25,7 +25,6 @@ void handleRRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, 
 int main(int argc, char **argv)
 {
 	char recBuffer[MAXPACKETLENGTH];
-	int rec;
 	int sock;
 
 	/*Create a socket */
@@ -46,7 +45,7 @@ int main(int argc, char **argv)
     tv.tv_sec=TIMEOUT;
     tv.tv_usec = 0;
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (char *)&tv, sizeof(struct timeval));
-
+	
 	/*using bind, socket now becomes a server)*/
 	if (bind(sock, (struct sockaddr *) &server, sizeof(server)) < 0){
 		perror("[Server] Binding socket failure. EXIT\n");
@@ -57,13 +56,12 @@ int main(int argc, char **argv)
 	printf("[Server] Connection Successful, awaiting Requests\n");
 	for(;;){
 
-		char buffer[MAXDATALENGTH];
 		struct sockaddr_in clientAddr; //client address
 		socklen_t clientAddrLen = sizeof(clientAddr);
 
 		// Size of received message
 		ssize_t numBytesRcvd = recvfrom(sock, recBuffer, MAXPACKETLENGTH, 0,
- 			(struct sockaddr *) &clientAddr, &clientAddrLen);
+ 			(struct sockaddr_in *) &clientAddr, &clientAddrLen);
 
 		printPacket(recBuffer, numBytesRcvd);
 
@@ -74,8 +72,8 @@ int main(int argc, char **argv)
 
 		short opCode = ntohs(getOpcode(recBuffer));
 		printf("[Server] Received a reply from client with opcode: %d\n", opCode);
-
-
+		printf("[Server] Client has port of %d  \n", ntohs(clientAddr.sin_port));
+	
 		if(numBytesRcvd >0) {
 			switch(opCode){
 				/*RRQ*/
@@ -188,10 +186,10 @@ void handleRRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, 
 			char * dpkt = createDataPacket(blockNum, outBuffer, dataSize);
 
 			printf("[Server] RRQ: Sending block# %d of data. Attempt #%d", blockNum, numOfAttempts);
-			printf("\n%s\n", outBuffer);
-			size_t numBytesSent = sendto(sock, dpkt, dataSize + 4 , 0,
-				(struct sockaddr *) &clientAddr, clientAddrLen);
-
+			printf("\n[DATA]%s\n", outBuffer);
+			size_t numBytesSent = sendto(sock, dpkt, MAXDATALENGTH+4 , 0,
+				(struct sockaddr_in *) clientAddr, clientAddrLen);
+			printf("[Server] RRQ has sent %d bytes\n", numBytesSent);
 			if (numBytesSent <= 0)
 			 	printf("[Server] RRQ: SendTo Failed\n");
 				break;

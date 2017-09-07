@@ -9,10 +9,10 @@
 #include "pack_structs.h"
 
 
-#define TIMEOUT 600
+#define TIMEOUT 60
 #define MAXPENDINGS 10
 #define PORT 61005
-#define MAXSTRINGLENGTH 512
+#define MAXPACKETLENGTH 2048
 #define REQUESTHDR 10
 
 int getOpcode(char * packet);
@@ -25,7 +25,7 @@ void printPacket(char * packet, int size);
 
 int main(int argc, char *argv[])
 {
-	char recBuffer[512];
+	char recBuffer[MAXPACKETLENGTH];
 	char * filename;
 	int attempts;
 	int sock;
@@ -43,7 +43,7 @@ int main(int argc, char *argv[])
 	memset(&localAddress, 0 , sizeof(localAddress)); //zero out structure
     localAddress.sin_family = AF_INET; //AF_INET signifies IPv4 address family
     localAddress.sin_addr.s_addr = htonl(INADDR_ANY);
-    localAddress.sin_port = htons(55532);
+    localAddress.sin_port = htons(54332);
 
     /*bind socket to address*/
     if (bind(sock, (struct sockaddr *)&localAddress, sizeof(localAddress)) < 0) {
@@ -59,7 +59,10 @@ int main(int argc, char *argv[])
     serverAddress.sin_port = htons(PORT); //local port
     socklen_t serverAddrLen = sizeof(serverAddress);
 
+    printf("[Client] Client has address of %u and %d \n",ntohl(localAddress.sin_addr.s_addr), 
+			ntohs(localAddress.sin_port));
     /*setting timeout struct*/
+
     struct timeval tv;
     tv.tv_sec=TIMEOUT;
     tv.tv_usec = 0;
@@ -98,9 +101,12 @@ int main(int argc, char *argv[])
 
 		while(processComplete == 0){
 			/*if succesful should receive the first data pack back*/
-			int numOfBytesRec = recvfrom(sock, recBuffer, 2048, 0, (struct sockaddr*)&serverAddress, &serverAddrLen);
+			printf("[Client] Waiting on Reply from Server\n");
+			memset(&recBuffer, 0 , sizeof(recBuffer));
+			int numOfBytesRec = recvfrom(sock, recBuffer, MAXPACKETLENGTH, 0, (struct sockaddr*)&serverAddress, &serverAddrLen);
+			
 			if(numOfBytesRec <= 0){
-				perror("[Client]: Recvfom failed. EXIT\n");
+				printf("[Client]: Recvfom failed. %d returned. EXIT\n", numOfBytesRec);
 				return 0;
 			}
 			short blockNum = getBlockNumber(recBuffer);
