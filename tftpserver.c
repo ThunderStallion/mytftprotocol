@@ -140,7 +140,6 @@ void handleRRQ( int sock, char * filename, struct sockaddr_in clientAddr, sockle
 			 	printf("[Server] RRQ: SendTo Failed\n [ERROR] %s\n", strerror(errno));
 				return;
 			}
-			
 			if(clock() - start > TIMEOUT){
 				numOfAttempts++;
 				continue;
@@ -152,7 +151,7 @@ void handleRRQ( int sock, char * filename, struct sockaddr_in clientAddr, sockle
 			short opCode = ntohs(getOpcode(recBuffer));
 			short blockNum = ntohs(getBlockNumber(recBuffer));
 
-			printf("[Server] Received a reply from client for blockNum: %d \n", opCode, blockNum);
+			printf("[Server] Received a reply from client for blockNum: %d \n", blockNum);
 			if(numBytesRcvd < 0){
 				printf("[Server] Error receiving from client, reattempt.");
 				numOfAttempts++;

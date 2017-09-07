@@ -7,11 +7,15 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 #include "tftplib.h"
+#include <errno.h>
+
 
 
 char * createConnectRequest(int type, char * filename , size_t len);
-int handleRRQ(int sock, char * filename, struct sockaddr_in* serverAddress, socklen_t serverAddrLen);
-int handleWRQ(int sock, char * filename, struct sockaddr_in* serverAddress, socklen_t serverAddrLen);
+int handleRRQ(int sock, char * filename, struct sockaddr_in serverAddress, socklen_t serverAddrLen);
+int handleWRQ(int sock, char * filename, struct sockaddr_in serverAddress, socklen_t serverAddrLen);
+int checkConnectionRequest(char * buffer);
+
 
 int main(int argc, char *argv[])
 {
@@ -72,9 +76,9 @@ int main(int argc, char *argv[])
 		//Choose Read or Write
 		int type = -1;
 		if(strcmp(argv[1], "-r") == 0)
-			handleRRQ(sock, filename, &serverAddress, serverAddrLen);
+			handleRRQ(sock, filename, serverAddress, serverAddrLen);
 		else if(strcmp(argv[1], "-w") == 0)
-			handleWRQ(sock, filename, &serverAddress, serverAddrLen);
+			handleWRQ(sock, filename, serverAddress, serverAddrLen);
 		else {
 			perror("[Client] ERROR: Incorrect option for RW; use -w or -r\n");
 			return 0;
@@ -84,21 +88,35 @@ int main(int argc, char *argv[])
 
 	return 0;
 }
-int handleRRQ(int sock, char * filename, struct sockaddr_in* serverAddress, socklen_t serverAddrLen) {
+int handleRRQ(int sock, char * filename, struct sockaddr_in serverAddress, socklen_t serverAddrLen) {
 		printf("[Client] Handling RRQ \n");
+		
 		char recBuffer[MAXPACKETLENGTH];
 		short blockNum = 0;
-
-		char * requestBuffer = createConnectRequest(1, filename, strlen(filename));
-		int x = sendto(sock, requestBuffer, strlen(filename)+REQUESTHDR,
-			 0, (struct sockaddr*) serverAddress, serverAddrLen);
-        printf("[Client]: %d bytes are being sent to server\n", x);
-
-
+		int connectRequest = 0;
         int processComplete = 0;
 		int ack_sent = 0;
 		int ack_rec = 0;
-		while(processComplete == 0){
+		int numOfAttempts=0;
+		FILE *f = fopen("writetoclient.txt", "w");
+		if (f == NULL)
+		{
+			    printf("Error opening file!\n");
+			    exit(1);
+		}
+								
+		while(processComplete == 0 && numOfAttempts <=MAXPENDINGS){
+
+			if(numOfAttempts == MAXPENDINGS){
+				printf("[Client] RRQ: Exceeded Max attempts. Exiting\n");
+				return 0;
+			}
+			if(connectRequest == 0){
+				char * requestBuffer = createConnectRequest(1, filename, strlen(filename));
+				int x = sendto(sock, requestBuffer, strlen(filename)+REQUESTHDR,
+		 			0, (struct sockaddr*) &serverAddress, serverAddrLen);
+			}
+
 			/*if succesful should receive the first data pack back*/
 			printf("[Client] Waiting on Reply from Server\n");
 			memset(&recBuffer, 0 , sizeof(recBuffer));
@@ -109,8 +127,8 @@ int handleRRQ(int sock, char * filename, struct sockaddr_in* serverAddress, sock
 				return 0;
 			}
 			if(numOfBytesRec-4 <MAXDATALENGTH){
-				printf("[Client] Server has signaled end of file. Closing RRQ\n");
-				return 0;
+				printf("[Client] Server has signaled end of file. \n");
+				processComplete = 1;
 			}
 			short opCode = ntohs(getOpcode(recBuffer));
 			printf("[Client] Received a reply from client with opcode: %d\n", opCode);
@@ -120,39 +138,24 @@ int handleRRQ(int sock, char * filename, struct sockaddr_in* serverAddress, sock
 				case 3:{
 
 					short blockNum = getBlockNumber(recBuffer);
+					if(blockNum == 1){
+						connectRequest =1;
+					}
+					
 					char * message = getDataPacket(recBuffer, numOfBytesRec-4);
-
-					printf("[CLIENT]: Packet #%d Recieved from peer -- \n %s\n", blockNum, message);
-
-					char * ackPkt = createAckPacket(blockNum);
-					printf("[Client]: Creating Ack Packet #%d\n", blockNum);
-					printACKPacket(ackPkt);
-					ack_sent = blockNum;
-					int x = sendto(sock, ackPkt, 4, 0, (struct sockaddr*)&serverAddress, serverAddrLen);
-
-    				printf("[Client]: %d bytes are being sent to server\n", x);
+					printf("[CLIENT]: Packet #%d Recieved from peer -- \n[DATA]: %s\n", blockNum, message);
+					if(blockNum = ack_sent +1){
+						
+						fprintf(f, "%s", message);
+						char * ackPkt = createAckPacket(blockNum);
+						printf("[Client]: Creating Ack Packet #%d\n", blockNum);
+						ack_sent = blockNum;
+						numOfAttempts = -1;
+						int x = sendto(sock, ackPkt, 4, 0, (struct sockaddr*)&serverAddress, serverAddrLen);
+	    				printf("[Client]: %d bytes are being sent to server\n", x);
+    				}
 					break;
 
-				}
-				/*Ack is received*/
-				case 4:{
-					if(numOfBytesRec > 4){
-						printf("[Client] RRQ: ACK packet size too large");
-						break;
-					}
-					short ackNum = getBlockNumber(recBuffer);
-					printf("[Client] RRQ: Received ACK %d", ackNum);
-					//if ack matches block number, move on to next Data
-					if(ackNum == blockNum){
-						blockNum++;
-						ack_rec = 1;
-						break;
-					}
-					//
-					else{
-						break;
-					}
-					break;
 				}
 				/*error is received*/
 				case 5:{
@@ -164,17 +167,19 @@ int handleRRQ(int sock, char * filename, struct sockaddr_in* serverAddress, sock
 					break;
 				}
 				default:
-					printf("[Client] Out of place opcode received \n");
+					printf("[Client] Out of place opCode received \n");
 					break;
 
-			}
+				}
+			numOfAttempts++;
 
 		}
+		fclose("writetoclient.txt");
 		printf("[Client] Connection has end. Closing down.\n");
 		return 1;
 }
 
-int handleWRQ(int sock, char * filename, struct sockaddr_in* serverAddress, socklen_t serverAddrLen) {
+int handleWRQ(int sock, char * filename, struct sockaddr_in serverAddress, socklen_t serverAddrLen) {
 		printf("[Client] Handling WRQ \n");
 		char recBuffer[MAXPACKETLENGTH];
 		char dataToSend[MAXDATALENGTH];
@@ -187,13 +192,13 @@ int handleWRQ(int sock, char * filename, struct sockaddr_in* serverAddress, sock
 			while (ack_rec == 0) {
 				char * requestBuffer = createConnectRequest(2, filename, strlen(filename));
 				int x = sendto(sock, requestBuffer, strlen(filename)+REQUESTHDR,
-				 	0, (struct sockaddr*) serverAddress, serverAddrLen);
+				 	0, (struct sockaddr*) &serverAddress, serverAddrLen);
 	    	printf("[Client]: %d bytes are being sent to server\n", x);
 
 				/*if succesful should receive an ack back*/
 				printf("[Client] Waiting on Reply from Server\n");
 				memset(&recBuffer, 0 , sizeof(recBuffer));
-				int numOfBytesRec = recvfrom(sock, recBuffer, MAXPACKETLENGTH, 0, (struct sockaddr*) &serverAddress, &serverAddrLen);
+				int numOfBytesRec = recvfrom(sock, recBuffer, MAXPACKETLENGTH, 0, (struct sockaddr*) &serverAddress, serverAddrLen);
 
 				if(numOfBytesRec <= 0){
 					printf("[Client]: Recvfom failed. %d returned. EXIT\n", numOfBytesRec);
@@ -253,7 +258,7 @@ int handleWRQ(int sock, char * filename, struct sockaddr_in* serverAddress, sock
 				printf("[Client] WRQ: Sending block# %d of data. Attempt #%d", blockNum, numOfAttempts);
 				printf("\n[DATA]%s\n", dataToSend);
 				size_t numBytes = sendto(sock, dpkt, numBytesSent , 0,
-					(struct sockaddr_in *) serverAddress, serverAddrLen);
+					(struct sockaddr_in *) &serverAddress, serverAddrLen);
 				printf("[Client] WRQ has sent %d bytes\n", numBytes);
 				if (numBytes <= 0)
 			 		printf("[Client] WRQ: SendTo Failed\n");
@@ -313,6 +318,16 @@ int handleWRQ(int sock, char * filename, struct sockaddr_in* serverAddress, sock
 		return 1;
 }
 
+int checkConnectionRequest(char * buffer){
+	short blockNum = ntohs(getBlockNumber(buffer));
+	short opCode = ntohs(getOpcode(buffer));
+	printf("[client] blocknum %d, opCode %d\n", blockNum, opCode);
+	if(blockNum == 1 && opCode==1)
+		return 1;
+	else
+		return 0;
+
+}
 char * createConnectRequest(int type, char * filename, size_t len ){
 	printf("[Client] creating connection request packet\n");
 
