@@ -72,24 +72,20 @@ int main(int argc, char **argv)
 
 					
 					handleRRQ(sock, getFileName(recBuffer), clientAddr,  clientAddrLen ); // WRITING
-					
 
-					printf("[Server] Transmission Complete [Read Request]\n");
+					printf("[Server] Transmission Complete.\n");
 					break;
 				}
 				/*WRQ*/
 				case 2:{
 					printf("[Server] Received [Write Request]\n");
 
-					FILE * openFile = fopen(getFileName(recBuffer), "w");
-					//handleWRQ(sock, openFile, &clientAddr,  clientAddrLen ); // WRITING
-					fclose(openFile);
 
 					printf("[Server] Transmission Complete [Write Request]\n");
 					break;
 				}
 				default:{
-					printf("[Server] Error No RRQ/WRQ Made\n");
+					printf("[Server] Error. Please make a Read/Write request first\n");
 					break;
 				}
 			}
@@ -111,7 +107,6 @@ void handleRRQ( int sock, char * filename, struct sockaddr_in clientAddr, sockle
 	while(sendComplete==0){
 
 		memset(&fileBuffer, 0, MAXDATALENGTH * sizeof(char)); //reset buffer to 0
-		
 		int dataSize = fread(&fileBuffer, sizeof(char), MAXDATALENGTH, requestedFile);
 
 		if(dataSize <= 0){
@@ -159,9 +154,7 @@ void handleRRQ( int sock, char * filename, struct sockaddr_in clientAddr, sockle
 					if(numBytesRcvd > 4){
 						printf("[Server] RRQ: ACK packet size too large");
 						break;
-					}
-					printf("[Server] After print 4\n");
-					
+					}					
 					short ackNum = ntohs(getBlockNumber(recBuffer));
 					printf("[Server] RRQ: Received ACK %d\n", ackNum);
 					//if ack matches block number, move on to next Data
@@ -186,21 +179,16 @@ void handleRRQ( int sock, char * filename, struct sockaddr_in clientAddr, sockle
 					return;
 					break;
 				}
-			}
-			
-						
+			}	
 
 			if(numOfAttempts == MAXPENDINGS){
-				printf("RRQ: Exceeded Max attempts");
+				printf("[Server] RRQ: Exceeded Max attempts. Exiting\n");
 				return;
-
 			}
-			/*TO DO: If MAX-ATTEMPTS = 10 , send error Message*/
-			/*TO DO: Timer*/
 		}
 	}
 	fclose(requestedFile);
-	printf("[SERVER] Connection has end. Closing down.\n");
+	printf("[Server] RRQ: Finished. \n");
 	return;
 }
 
