@@ -150,7 +150,6 @@ void handleRRQ( int sock, char * filename, struct sockaddr_in clientAddr, sockle
  			(struct sockaddr *) &clientAddr, &clientAddrLen);
 
 			short opCode = ntohs(getOpcode(recBuffer));
-			short blockNum = ntohs(getBlockNumber(recBuffer));
 
 			printf("[Server] Received a reply from client for blockNum: %d \n", opCode, blockNum);
 			if(numBytesRcvd < 0){
@@ -200,10 +199,10 @@ void handleRRQ( int sock, char * filename, struct sockaddr_in clientAddr, sockle
 }
 
 // Receiving file from client
-void handleWRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, socklen_t clientAddrLen){
+void handleWRQ( int sock, FILE * requestedFile, struct sockaddr_in clientAddr, socklen_t clientAddrLen){
 
 	char dataBuffer[MAXDATALENGTH];
-	char inBuffer[MAXDATALENGTH + 4];
+	char inBuffer[MAXPACKETLENGTH];
 	int blockNum = 1;
 	int receiptComplete = 0;
 
@@ -211,7 +210,7 @@ void handleWRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, 
 
 		int numAttempts = 0;
 		while(numAttempts < MAXPENDINGS) {
-			memset(&inBuffer, 0, MAXDATALENGTH * sizeof(char));
+			memset(&inBuffer, 0, MAXPACKETLENGTH * sizeof(char));
 			printf("WRQ: Sending block # %d of ACK", blockNum);
 			char * ackpkt = createAckPacket(blockNum);
 			ssize_t numBytesSent = sendto(sock, ackpkt, ACKSIZE, 0,
@@ -221,7 +220,7 @@ void handleWRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, 
 				break;
 			}
 
-			ssize_t numBytesRcvd = recvfrom(sock, inBuffer, MAXDATALENGTH + 4, 0,
+			size_t numBytesRcvd = recvfrom(sock, inBuffer, MAXDATALENGTH + 4, 0,
  			NULL, NULL);
 			if(numBytesRcvd >= 0){
 

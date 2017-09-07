@@ -85,9 +85,24 @@ int main(int argc, char *argv[])
 	return 0;
 }
 int handleRRQ(int sock, char * filename, struct sockaddr_in* serverAddress, socklen_t serverAddrLen) {
-		printf("[Client] Handling RRQ \n");
+		
 		char recBuffer[MAXPACKETLENGTH];
-		short blockNum = 0;
+		short localBlock = 0;
+		char * folder = "./client/";
+		printf("[Client] %d \n", strlen(filename));
+		char * result = malloc(9+strlen(filename)+1);
+		printf("[Client] Handling RRQ \n");
+		strcpy(result, folder);
+    	strcat(result, filename);
+		printf("[Client] Handling RRQ %s\n", result);
+		FILE * openFile = fopen(result, "w");
+		if (openFile == NULL)
+		{
+		    printf("Error opening file!\n");
+		    exit(1);
+		}
+
+		printf("[Client] Handling RRQ \n");
 
 		char * requestBuffer = createConnectRequest(1, filename, strlen(filename));
 		int x = sendto(sock, requestBuffer, strlen(filename)+REQUESTHDR,
@@ -121,38 +136,25 @@ int handleRRQ(int sock, char * filename, struct sockaddr_in* serverAddress, sock
 
 					short blockNum = getBlockNumber(recBuffer);
 					char * message = getDataPacket(recBuffer, numOfBytesRec-4);
+					printf("[CLIENT]: Packet #%d Recieved from peer -- \n[DATA] %s\n", blockNum, message);
 
-					printf("[CLIENT]: Packet #%d Recieved from peer -- \n %s\n", blockNum, message);
 
+					if(blockNum == (localBlock+1)){
+						printf("[CLIENT]: Block Number matches %d \n", localBlock+1);
+
+						fprintf(openFile,"%s", message);
+						printf("[CLIENT]: Block Number matches %d \n", localBlock+1);
+
+						localBlock = blockNum;
+					}
 					char * ackPkt = createAckPacket(blockNum);
 					printf("[Client]: Creating Ack Packet #%d\n", blockNum);
 					printACKPacket(ackPkt);
-					ack_sent = blockNum;
 					int x = sendto(sock, ackPkt, 4, 0, (struct sockaddr*)&serverAddress, serverAddrLen);
 
     				printf("[Client]: %d bytes are being sent to server\n", x);
 					break;
 
-				}
-				/*Ack is received*/
-				case 4:{
-					if(numOfBytesRec > 4){
-						printf("[Client] RRQ: ACK packet size too large");
-						break;
-					}
-					short ackNum = getBlockNumber(recBuffer);
-					printf("[Client] RRQ: Received ACK %d", ackNum);
-					//if ack matches block number, move on to next Data
-					if(ackNum == blockNum){
-						blockNum++;
-						ack_rec = 1;
-						break;
-					}
-					//
-					else{
-						break;
-					}
-					break;
 				}
 				/*error is received*/
 				case 5:{
@@ -170,6 +172,7 @@ int handleRRQ(int sock, char * filename, struct sockaddr_in* serverAddress, sock
 			}
 
 		}
+		fclose(openFile);
 		printf("[Client] Connection has end. Closing down.\n");
 		return 1;
 }
