@@ -107,7 +107,7 @@ int handleRRQ(int sock, char * filename, struct sockaddr_in* serverAddress, sock
 				printf("[Client]: Recvfom failed. %d returned. EXIT\n", numOfBytesRec);
 				return 0;
 			}
-			short opCode = ntohs(getOpcode(&recBuffer));
+			short opCode = ntohs(getOpcode(recBuffer));
 			printf("[Client] Received a reply from client with opcode: %d\n", opCode);
 
 			switch(opCode){
@@ -115,21 +115,26 @@ int handleRRQ(int sock, char * filename, struct sockaddr_in* serverAddress, sock
 				case 3:{
 
 					short blockNum = getBlockNumber(recBuffer);
-					printf("[CLIENT]: Packet #%d Recieved from peer -- \n %s\n", blockNum, recBuffer);
+					char * message = getDataPacket(recBuffer, numOfBytesRec-4);
+
+					printf("[CLIENT]: Packet #%d Recieved from peer -- \n %s\n", blockNum, message);
+
 					char * ackPkt = createAckPacket(blockNum);
 					printf("[Client]: Creating Ack Packet #%d\n", blockNum);
+					printACKPacket(ackPkt);
 					ack_sent = blockNum;
 					int x = sendto(sock, ackPkt, 4, 0, (struct sockaddr*)&serverAddress, serverAddrLen);
     				printf("[Client]: %d bytes are being sent to server\n", x);
-
+    				break;
 				}
 				/*Ack is received*/
 				case 4:{
+					break;
 
 				}
 				/*error is received*/
 				case 5:{
-
+					break;
 				}
 				default:
 					printf("[Client] Out of place opcode received \n");
@@ -138,7 +143,7 @@ int handleRRQ(int sock, char * filename, struct sockaddr_in* serverAddress, sock
 			}
 
 		}
-
+		printf("[Client] Connection has end. Closing down.\n");
 		return 1;
 }
 

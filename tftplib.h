@@ -6,7 +6,7 @@
 #include <sys/socket.h>
 
 
-#define TIMEOUT 6000
+#define TIMEOUT 600
 #define MAXPENDINGS 10
 #define PORT 61005
 #define MAXDATALENGTH 512

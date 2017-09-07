@@ -35,7 +35,7 @@ short getOpcode(char * packet){
 }
 short getBlockNumber(char * packet){
 	short blockNum=0;
-	memcpy(&blockNum, packet+2, 2);
+	memcpy(&blockNum, packet+2, 1*sizeof(short));
 	return blockNum;
 }
 char * getDataPacket(char * packet, int size){
@@ -60,6 +60,7 @@ void printPacket(char * packet, int size){
 	for(int x= 2 ; x<size; x++){
 		printf("[%d]: %c\n", x, packet[x]);
 	}
+	return;
 }
 
 void printACKPacket(char * packet){
@@ -69,6 +70,7 @@ void printACKPacket(char * packet){
 	for(int x= 2 ; x<4; x++){
 		printf("[%d]: %d\n", x, packet[x]);
 	}
+	return;
 }
 
 
