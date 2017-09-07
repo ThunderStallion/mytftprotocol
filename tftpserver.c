@@ -10,7 +10,7 @@
 
 
 void handleRRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, socklen_t clientAddrLen);
-//void handleWRQ(int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, socklen_t clientAddrLen);
+void handleWRQ(int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, socklen_t clientAddrLen);
 
 int main(int argc, char **argv)
 {
@@ -197,14 +197,14 @@ void handleRRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, 
 void handleWRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, socklen_t clientAddrLen){
 
 	char dataBuffer[MAXDATALENGTH];
-	char inBuffer[RQSIZE];
-	int blockNum = 0;
+	char inBuffer[MAXDATALENGTH + 4];
+	int blockNum = 1;
 	int receiptComplete = 0;
 
 	while(receiptComplete == 0){
 
 		int numAttempts = 0;
-		while(numOfAttempts < MAXPENDINGS) {
+		while(numAttempts < MAXPENDINGS) {
 			memset(&inBuffer, 0, MAXDATALENGTH * sizeof(char));
 			printf("WRQ: Sending block # %d of ACK", blockNum);
 			char * ackpkt = createAckPacket(blockNum);
@@ -215,13 +215,13 @@ void handleWRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, 
 				break;
 			}
 
-			ssize_t numBytesRcvd = recvfrom(sock, inBuffer, RQSIZE, 0,
+			ssize_t numBytesRcvd = recvfrom(sock, inBuffer, MAXDATALENGTH + 4, 0,
  			NULL, NULL);
 			if(numBytesRcvd >= 0){
 
 				memset(&dataBuffer, 0, MAXDATALENGTH * sizeof(char));
 				char * data = getDataPacket(inBuffer, numBytesRcvd - 4);
-				short recBlockNum = getBlockNum(inBuffer);
+				short recBlockNum = getBlockNumber(inBuffer);
 				printf("WRQ: Received Block %d", recBlockNum);
 				memcpy(&dataBuffer, data, numBytesRcvd - 4);
 				if ((numBytesRcvd - 4) < MAXDATALENGTH) {
@@ -239,10 +239,11 @@ void handleWRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, 
 		}
 	}
 
-	printf("WRQ: Sending block # %d of ACK", blockNum);
+	printf("WRQ: Sending block # %d of ACK\n", blockNum);
 	char * ackpkt = createAckPacket(blockNum);
 	ssize_t numBytesSent = sendto(sock, ackpkt, ACKSIZE, 0,
 		(struct sockaddr *) &clientAddr, clientAddrLen);
+	printf(numBytesSent);
 	if (numBytesSent != ACKSIZE) {
 		printf("WRQ: SendTo Failed\n");
 	}
