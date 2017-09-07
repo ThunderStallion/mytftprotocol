@@ -9,23 +9,23 @@
 #include "pack_structs.h"
 
 
-#define TIMEOUT 60
+#define TIMEOUT 6000
 #define MAXPENDINGS 10
 #define PORT 61005
 #define MAXPACKETLENGTH 2048
 #define REQUESTHDR 10
 
-int getOpcode(char * packet);
+short getOpcode(char * packet);
 char * getFileName(char packet[]);
 short getBlockNumber(char * packet);
 char * getDataPacket(char * packet, int size);
 char * createConnectRequest(int type, char * filename , size_t len);
 char * createAckPacket(int blockNum);
 void printPacket(char * packet, int size);
+int handleRRQ(int sock, char * filename, struct sockaddr_in* serverAddress, socklen_t serverAddrLen);
 
 int main(int argc, char *argv[])
 {
-	char recBuffer[MAXPACKETLENGTH];
 	char * filename;
 	int attempts;
 	int sock;
@@ -82,33 +82,72 @@ int main(int argc, char *argv[])
 
 		//Choose Read or Write
 		int type = -1;
-		if(strcmp(argv[1], "-r")) type = 1;
-		else if(strcmp(argv[2], "-w")) type = 2;
+		if(strcmp(argv[1], "-r") == 0) 
+			handleRRQ(sock, filename, &serverAddress, serverAddrLen);
+		else if(strcmp(argv[1], "-w") ==0)
+			 type = 2;
 		else {
 			perror("[Client] ERROR: Incorrect option for RW; use -w or -r\n");
 			return 0;
 		}
 
-		/*creates first RRQ and send*/
+	}
+
+	return 0;
+}
+int handleRRQ(int sock, char * filename, struct sockaddr_in* serverAddress, socklen_t serverAddrLen) {
+		printf("[Client] Handling RRQ \n");
+		char recBuffer[MAXPACKETLENGTH];
+		short blockNum = 0;
+
 		char * requestBuffer = createConnectRequest(1, filename, strlen(filename));
 		int x = sendto(sock, requestBuffer, strlen(filename)+REQUESTHDR,
-			 0, (struct sockaddr*)&serverAddress, serverAddrLen);
+			 0, (struct sockaddr*) serverAddress, serverAddrLen);
         printf("[Client]: %d bytes are being sent to server\n", x);
-		
-		
-		int processComplete = 0;
+
+
+        int processComplete = 0;
 		int ack_sent = 0;
 
 		while(processComplete == 0){
 			/*if succesful should receive the first data pack back*/
 			printf("[Client] Waiting on Reply from Server\n");
 			memset(&recBuffer, 0 , sizeof(recBuffer));
-			int numOfBytesRec = recvfrom(sock, recBuffer, MAXPACKETLENGTH, 0, (struct sockaddr*)&serverAddress, &serverAddrLen);
-			
+			int numOfBytesRec = recvfrom(sock, recBuffer, MAXPACKETLENGTH, 0, (struct sockaddr*) &serverAddress, &serverAddrLen);
+
 			if(numOfBytesRec <= 0){
 				printf("[Client]: Recvfom failed. %d returned. EXIT\n", numOfBytesRec);
 				return 0;
 			}
+			short opCode = getOpcode(&recBuffer);
+
+			switch(opCode){
+				/*Data is received*/
+				case 3:{
+
+					short blockNum = getBlockNumber(recBuffer);
+					printf("[CLIENT]: Packet #%d Recieved from peer -- \n %s\n", blockNum, recBuffer);
+					char * ackPkt = createAckPacket(blockNum);
+					printf("[Client]: Creating Ack Packet #%d", blockNum);
+					ack_sent = blockNum;
+					int x = sendto(sock, ackPkt, 4, 0, (struct sockaddr*)&serverAddress, serverAddrLen);
+    				printf("[Client]: %d bytes are being sent to server\n", x);
+
+				}
+				/*Ack is received*/
+				case 4:{
+
+				}
+				/*error is received*/
+				case 5:{
+
+				}
+				default:
+					printf("[Client] Out of place opcode received \n");
+					break;
+
+			}
+
 			short blockNum = getBlockNumber(recBuffer);
 			printf("[CLIENT]: Packet #%d Recieved from peer -- \n %s\n", blockNum, recBuffer);
 			char * ackPkt = createAckPacket(blockNum);
@@ -119,11 +158,8 @@ int main(int argc, char *argv[])
     		printf("[Client]: %d bytes are being sent to server\n", x);
 
 		}
-		
 
-	}
-
-	return 0;
+		return 1;
 }
 
 char * createConnectRequest(int type, char * filename, size_t len ){
@@ -159,7 +195,7 @@ char * createAckPacket(int blockNum){
 	return pkt_ptr;
 }
 
-int getOpcode(char * packet){
+short getOpcode(char * packet){
 	char  opCode = 0;
 	memcpy(&opCode, packet+1, 1 * sizeof(char));
 	return opCode;

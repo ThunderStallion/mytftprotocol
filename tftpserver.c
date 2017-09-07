@@ -7,7 +7,7 @@
 #include <sys/socket.h>
 
 
-#define TIMEOUT 60
+#define TIMEOUT 6000
 #define MAXPENDINGS 10
 #define PORT 61005
 #define MAXDATALENGTH 512
@@ -63,7 +63,7 @@ int main(int argc, char **argv)
 		ssize_t numBytesRcvd = recvfrom(sock, recBuffer, MAXPACKETLENGTH, 0,
  			(struct sockaddr_in *) &clientAddr, &clientAddrLen);
 
-		printPacket(recBuffer, numBytesRcvd);
+		
 
 		if (numBytesRcvd < 0){
 			perror("[Server] recvd fail");
@@ -72,6 +72,7 @@ int main(int argc, char **argv)
 
 		short opCode = ntohs(getOpcode(recBuffer));
 		printf("[Server] Received a reply from client with opcode: %d\n", opCode);
+		printPacket(recBuffer, numBytesRcvd);
 		printf("[Server] Client has port of %d  \n", ntohs(clientAddr.sin_port));
 	
 		if(numBytesRcvd >0) {
@@ -161,7 +162,7 @@ char * createDataPacket(int blockNum, char * message, int size){
 }
 
 void handleRRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, socklen_t clientAddrLen){
-	char outBuffer[MAXDATALENGTH]; //buffer to read in file
+	char outBuffer[MAXPACKETLENGTH]; //buffer to read in file
 	char recBuffer[MAXDATALENGTH]; //buffer to receive messages from client
 	short blockNum = 0;
 	int sendComplete = 0; //bool to continue loop
