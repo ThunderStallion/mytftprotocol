@@ -11,6 +11,7 @@
 #define PORT 61005
 #define MAXDATALENGTH 512
 #define MAXPACKETLENGTH 2048
+#define REQUESTHDR 10
 
 
 char * createAckPacket(short blockNum);

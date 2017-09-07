@@ -4,6 +4,7 @@
 #include <time.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include "tftplib.h"
 
 char * createAckPacket(short blockNum){
 	char * pkt_ptr = malloc(4);
@@ -28,8 +29,8 @@ char * createDataPacket(int blockNum, char * message, int size){
 }
 
 short getOpcode(char * packet){
-	char  opCode = 0;
-	memcpy(&opCode, packet+1, 1 * sizeof(char));
+	short  opCode = 0;
+	memcpy(&opCode, packet, 1 * sizeof(short));
 	return opCode;
 }
 short getBlockNumber(char * packet){

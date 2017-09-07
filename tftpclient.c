@@ -6,22 +6,10 @@
 #include <sys/socket.h>
 #include <netdb.h>
 #include <arpa/inet.h>
-#include "pack_structs.h"
+#include "tftplib.h"
 
 
-#define TIMEOUT 6000
-#define MAXPENDINGS 10
-#define PORT 61005
-#define MAXPACKETLENGTH 2048
-#define REQUESTHDR 10
-
-short getOpcode(char * packet);
-char * getFileName(char packet[]);
-short getBlockNumber(char * packet);
-char * getDataPacket(char * packet, int size);
 char * createConnectRequest(int type, char * filename , size_t len);
-char * createAckPacket(int blockNum);
-void printPacket(char * packet, int size);
 int handleRRQ(int sock, char * filename, struct sockaddr_in* serverAddress, socklen_t serverAddrLen);
 
 int main(int argc, char *argv[])
@@ -119,7 +107,8 @@ int handleRRQ(int sock, char * filename, struct sockaddr_in* serverAddress, sock
 				printf("[Client]: Recvfom failed. %d returned. EXIT\n", numOfBytesRec);
 				return 0;
 			}
-			short opCode = getOpcode(&recBuffer);
+			short opCode = ntohs(getOpcode(&recBuffer));
+			printf("[Client] Received a reply from client with opcode: %d\n", opCode);
 
 			switch(opCode){
 				/*Data is received*/
@@ -128,7 +117,7 @@ int handleRRQ(int sock, char * filename, struct sockaddr_in* serverAddress, sock
 					short blockNum = getBlockNumber(recBuffer);
 					printf("[CLIENT]: Packet #%d Recieved from peer -- \n %s\n", blockNum, recBuffer);
 					char * ackPkt = createAckPacket(blockNum);
-					printf("[Client]: Creating Ack Packet #%d", blockNum);
+					printf("[Client]: Creating Ack Packet #%d\n", blockNum);
 					ack_sent = blockNum;
 					int x = sendto(sock, ackPkt, 4, 0, (struct sockaddr*)&serverAddress, serverAddrLen);
     				printf("[Client]: %d bytes are being sent to server\n", x);
@@ -147,15 +136,6 @@ int handleRRQ(int sock, char * filename, struct sockaddr_in* serverAddress, sock
 					break;
 
 			}
-
-			short blockNum = getBlockNumber(recBuffer);
-			printf("[CLIENT]: Packet #%d Recieved from peer -- \n %s\n", blockNum, recBuffer);
-			char * ackPkt = createAckPacket(blockNum);
-			printf("[Client]: Creating Ack Packet #%d", blockNum);
-			ack_sent = blockNum;
-			int x = sendto(sock, ackPkt, 4,
-		 	0, (struct sockaddr*)&serverAddress, serverAddrLen);
-    		printf("[Client]: %d bytes are being sent to server\n", x);
 
 		}
 
@@ -186,44 +166,3 @@ char * createConnectRequest(int type, char * filename, size_t len ){
 	return pkt_ptr;
 }
 
-char * createAckPacket(int blockNum){
-	char * pkt_ptr = malloc(4);
-	short opCode = htons(04);
-	short blockNumber = htons(blockNum);
-	memcpy(pkt_ptr, &opCode , 2);
-	memcpy(pkt_ptr+2, &blockNumber , 2);
-	return pkt_ptr;
-}
-
-short getOpcode(char * packet){
-	char  opCode = 0;
-	memcpy(&opCode, packet+1, 1 * sizeof(char));
-	return opCode;
-}
-short getBlockNumber(char * packet){
-	short blockNum=0;
-	memcpy(&blockNum, packet+2, 2);
-	return blockNum;
-}
-char * getDataPacket(char * packet, int size){
-	char * data = malloc(size);
-	memcpy(data, packet+4, size);
-	return data;
-}
-
-void printPacket(char * packet, int size){
-	for(int x=0 ; x<2; x++){
-		printf("[%d]: %d\n", x, packet[x]);
-	}
-	for(int x= 2 ; x<size; x++){
-		printf("[%d]: %c\n", x, packet[x]);
-	}
-}
-
-char * getFileName(char * packet){
-	 char * firstNull = strchr(packet+2, '\0');
-	 int fileLength = firstNull - (packet+2);
-	 char * fileName = (char *) malloc(fileLength);
-	 memcpy(fileName, packet+2, fileLength);
-	 return fileName;
-}

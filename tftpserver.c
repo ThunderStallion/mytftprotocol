@@ -2,22 +2,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include "pack_structs.h"
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include "tftplib.h"
 
 
-#define TIMEOUT 6000
-#define MAXPENDINGS 10
-#define PORT 61005
-#define MAXDATALENGTH 512
-#define MAXPACKETLENGTH 2048
 
-short getOpcode(char packet[]);
-short getBlockNum(char * packet);
-char * getFileName(char packet[]);
-char * getErrorMessage(char * packet);
-void printPacket(char * packet, int size);
 
 void handleRRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, socklen_t clientAddrLen);
 //void handleWRQ(int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, socklen_t clientAddrLen);
@@ -110,56 +100,7 @@ int main(int argc, char **argv)
 	return 0;
 }
 
-short  getOpcode(char * packet){
-	short  opCode = 0;
-	memcpy(&opCode, packet, 1 * sizeof(short));
 
-	return opCode;
-}
-
-short getBlockNum(char * packet){
-	short blockNum = 0;
-	memcpy(&blockNum, packet+2, 1 * sizeof(short));
-	return blockNum;
-
-}
-char * getFileName(char * packet){
-	 char * firstNull = strchr(packet+2, '\0');
-	 int fileLength = firstNull - (packet+2);
-	 char * fileName = (char *) malloc(fileLength);
-	 memcpy(fileName, packet+2, fileLength);
-	 return fileName;
-}
-
-char * getErrorMessage(char * packet){
-	char * firstNull = strchr(packet+4,'\0');
-	int errMsgLen = firstNull - (packet+4);
-	printf("%d\n", errMsgLen);
-	char * errMsg = (char *) malloc(errMsgLen);
-	memcpy(errMsg, packet+4, errMsgLen);
-	return errMsg;
-}
-
-char * getData(char * packet) {
-	int datalength = DATASIZE;
-	char * data = (char *) malloc(datalength);
-	memcpy(data, packet+4, datalength);
-
-	return data;
-}
-
-char * createDataPacket(int blockNum, char * message, int size){
-	printf("[Server] Creating Data Packet\n");
-
-	int length = size+4;
-	char * pkt_ptr = malloc(length);
-	short opCode = htons(03);
-
-	memcpy(pkt_ptr, &opCode , 2);
-	memcpy(pkt_ptr+2, &blockNum, 2);
-	memcpy(pkt_ptr+4, message , size);
-	return pkt_ptr;
-}
 
 void handleRRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, socklen_t clientAddrLen){
 	char outBuffer[MAXPACKETLENGTH]; //buffer to read in file
@@ -202,6 +143,7 @@ void handleRRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, 
 			short opCode = getOpcode(recBuffer);
 
 			printf("[Server] Received a reply from client with opcode: %d\n", opCode);
+			printPacket(recBuffer, numBytesRcvd);
 
 			if(numBytesRcvd > 0){
 				switch(opCode){
@@ -212,7 +154,7 @@ void handleRRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, 
 							printf("[Server] RRQ: ACK packet size too large");
 							break;
 						}
-						short ackNum = getBlockNum(recBuffer);
+						short ackNum = getBlockNumber(recBuffer);
 						printf("[Server] RRQ: Received ACK %d", ackNum);
 						//if ack matches block number, move on to next Data
 						if(ackNum == blockNum){
@@ -320,11 +262,3 @@ void handleRRQ( int sock, FILE * requestedFile, struct sockaddr_in* clientAddr, 
 }
 */
 
-void printPacket(char * packet, int size){
-	for(int x=0 ; x<2; x++){
-		printf("[%d]: %d\n", x, packet[x]);
-	}
-	for(int x= 2 ; x<size; x++){
-		printf("[%d]: %c\n", x, packet[x]);
-	}
-}

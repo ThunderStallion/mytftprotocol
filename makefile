@@ -3,17 +3,14 @@ CFLAGS = -g -Wall
 
 default: all
 
-all: server client tftplib
+all: server client tftplib.o
 
 
-server : tftpserver.c pack_structs.h tftplib.h
-	$(CC) $(CFLAGS) tftpserver.c -o tftpserver
+server : tftpserver.c pack_structs.h tftplib.o tftplib.h
+	$(CC) $(CFLAGS) tftpserver.c -o tftpserver tftplib.o
 
-tftplib : tftplib.h tftplib.c
-	$(CC) $(CFLAGS) -c tftplib.c  
-
-client : tftpclient.c pack_structs.h tftplib.h
-	$(CC) $(CFLAGS) tftpclient.c -o tftpclient
+client : tftpclient.c pack_structs.h tftplib.o tftplib.h
+	$(CC) $(CFLAGS) tftpclient.c -o tftpclient tftplib.o
 
 
 
